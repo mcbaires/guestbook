@@ -19,6 +19,7 @@
       color: #fff;
       padding: 2rem 1rem;
       text-align: center;
+      position: relative;
     }
 
     header h1 {
@@ -32,6 +33,34 @@
       opacity: 0.7;
       font-size: 0.95rem;
     }
+
+    #auth-bar {
+      position: absolute;
+      top: 1rem;
+      right: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    #auth-email {
+      font-size: 0.82rem;
+      opacity: 0.8;
+    }
+
+    .btn-auth {
+      padding: 0.4rem 0.9rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1.5px solid rgba(255,255,255,0.4);
+      background: transparent;
+      color: #fff;
+      transition: background 0.15s;
+    }
+
+    .btn-auth:hover { background: rgba(255,255,255,0.1); }
 
     main {
       max-width: 680px;
@@ -110,6 +139,79 @@
     button[type="submit"]:hover { background: #6d28d9; }
     button[type="submit"]:disabled { background: #c4b5fd; cursor: not-allowed; }
 
+    /* Auth modal */
+    #auth-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #auth-modal.open { display: flex; }
+
+    .modal-box {
+      background: #fff;
+      border-radius: 14px;
+      padding: 2rem;
+      width: 100%;
+      max-width: 380px;
+      margin: 1rem;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    }
+
+    .modal-box h2 {
+      font-size: 1.2rem;
+      margin-bottom: 1.25rem;
+      color: #1a1a1a;
+    }
+
+    #auth-error {
+      color: #e53935;
+      font-size: 0.83rem;
+      margin-bottom: 0.75rem;
+      display: none;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 0.6rem;
+      margin-top: 1rem;
+    }
+
+    .btn-primary {
+      flex: 1;
+      padding: 0.7rem;
+      background: #7c3aed;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .btn-primary:hover { background: #6d28d9; }
+    .btn-primary:disabled { background: #c4b5fd; cursor: not-allowed; }
+
+    .btn-secondary {
+      flex: 1;
+      padding: 0.7rem;
+      background: transparent;
+      color: #555;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+
+    .btn-secondary:hover { border-color: #aaa; }
+
     .entries-section { margin-top: 2.5rem; }
 
     .entries-section h2 {
@@ -146,15 +248,8 @@
       gap: 0.25rem;
     }
 
-    .entry-name {
-      font-weight: 700;
-      font-size: 1rem;
-    }
-
-    .entry-time {
-      font-size: 0.78rem;
-      color: #999;
-    }
+    .entry-name { font-weight: 700; font-size: 1rem; }
+    .entry-time { font-size: 0.78rem; color: #999; }
 
     .entry-message {
       font-size: 0.93rem;
@@ -177,7 +272,31 @@
 <header>
   <h1>Guestbook</h1>
   <p>Leave a message for the world to see.</p>
+  <div id="auth-bar">
+    <span id="auth-email"></span>
+    <button class="btn-auth" id="auth-btn">Sign In</button>
+  </div>
 </header>
+
+<!-- Sign in modal -->
+<div id="auth-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-box">
+    <h2 id="modal-title">Sign In</h2>
+    <div id="auth-error"></div>
+    <div class="field">
+      <label for="auth-email-input">Email</label>
+      <input id="auth-email-input" type="email" placeholder="you@example.com" autocomplete="email" />
+    </div>
+    <div class="field">
+      <label for="auth-password-input">Password</label>
+      <input id="auth-password-input" type="password" placeholder="••••••••" autocomplete="current-password" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-primary" id="signin-btn">Sign In</button>
+      <button class="btn-secondary" id="cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
 
 <main>
   <div class="card">
@@ -205,19 +324,118 @@
   </section>
 </main>
 
-<script>
-  const form = document.getElementById('guestbook-form');
-  const nameInput = document.getElementById('name');
-  const messageInput = document.getElementById('message');
-  const submitBtn = document.getElementById('submit-btn');
-  const entriesList = document.getElementById('entries-list');
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+  const SUPABASE_URL = 'https://xrjamvkwjdlhnxiewdvw.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_6SAGMpOtM_7alT2wDp2xnA_RS9XXVSS';
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // DOM refs
+  const authBtn       = document.getElementById('auth-btn');
+  const authEmailSpan = document.getElementById('auth-email');
+  const authModal     = document.getElementById('auth-modal');
+  const authError     = document.getElementById('auth-error');
+  const emailInput    = document.getElementById('auth-email-input');
+  const passwordInput = document.getElementById('auth-password-input');
+  const signinBtn     = document.getElementById('signin-btn');
+  const cancelBtn     = document.getElementById('cancel-btn');
+  const form          = document.getElementById('guestbook-form');
+  const nameInput     = document.getElementById('name');
+  const messageInput  = document.getElementById('message');
+  const submitBtn     = document.getElementById('submit-btn');
+  const entriesList   = document.getElementById('entries-list');
   const entriesHeading = document.getElementById('entries-heading');
+
+  // --- Auth UI ---
+
+  function setAuthUI(user) {
+    if (user) {
+      authEmailSpan.textContent = user.email;
+      authBtn.textContent = 'Sign Out';
+      // Pre-fill name if empty
+      if (!nameInput.value) nameInput.value = user.email.split('@')[0];
+    } else {
+      authEmailSpan.textContent = '';
+      authBtn.textContent = 'Sign In';
+    }
+  }
+
+  authBtn.addEventListener('click', async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      await supabase.auth.signOut();
+      setAuthUI(null);
+      nameInput.value = '';
+    } else {
+      openModal();
+    }
+  });
+
+  function openModal() {
+    authModal.classList.add('open');
+    authError.style.display = 'none';
+    authError.textContent = '';
+    emailInput.value = '';
+    passwordInput.value = '';
+    emailInput.focus();
+  }
+
+  function closeModal() {
+    authModal.classList.remove('open');
+  }
+
+  cancelBtn.addEventListener('click', closeModal);
+  authModal.addEventListener('click', (e) => { if (e.target === authModal) closeModal(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
+
+  signinBtn.addEventListener('click', async () => {
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+
+    if (!email || !password) {
+      showAuthError('Please enter your email and password.');
+      return;
+    }
+
+    signinBtn.disabled = true;
+    signinBtn.textContent = 'Signing in…';
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    signinBtn.disabled = false;
+    signinBtn.textContent = 'Sign In';
+
+    if (error) {
+      showAuthError(error.message);
+    } else {
+      setAuthUI(data.user);
+      closeModal();
+    }
+  });
+
+  // Allow submitting the modal with Enter
+  [emailInput, passwordInput].forEach(el => {
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') signinBtn.click(); });
+  });
+
+  function showAuthError(msg) {
+    authError.textContent = msg;
+    authError.style.display = 'block';
+  }
+
+  // --- Guestbook ---
 
   function formatDate(iso) {
     return new Date(iso).toLocaleString(undefined, {
       year: 'numeric', month: 'short', day: 'numeric',
       hour: '2-digit', minute: '2-digit',
     });
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+              .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
   }
 
   function renderEntry(entry, prepend = false) {
@@ -227,24 +445,13 @@
     el.innerHTML = `
       <div class="entry-header">
         <span class="entry-name">${escapeHtml(entry.name)}</span>
-        <span class="entry-time">${formatDate(entry.timestamp)}</span>
+        <span class="entry-time">${formatDate(entry.created_at)}</span>
       </div>
       <p class="entry-message">${escapeHtml(entry.message)}</p>
     `;
-
     const empty = entriesList.querySelector('.empty');
     if (empty) empty.remove();
-
-    if (prepend) {
-      entriesList.prepend(el);
-    } else {
-      entriesList.appendChild(el);
-    }
-  }
-
-  function escapeHtml(str) {
-    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-              .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    prepend ? entriesList.prepend(el) : entriesList.appendChild(el);
   }
 
   function updateHeading(count) {
@@ -263,8 +470,6 @@
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-
-    let valid = true;
     const nameVal = nameInput.value.trim();
     const messageVal = messageInput.value.trim();
 
@@ -281,23 +486,22 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: nameVal, message: messageVal }),
       });
-
       if (!res.ok) throw new Error('Server error');
-
       const entry = await res.json();
       renderEntry(entry, true);
-
-      const current = entriesList.querySelectorAll('.entry').length;
-      updateHeading(current);
-
+      updateHeading(entriesList.querySelectorAll('.entry').length);
       form.reset();
-    } catch (err) {
+    } catch {
       alert('Something went wrong. Please try again.');
     } finally {
       submitBtn.disabled = false;
       submitBtn.textContent = 'Post Message';
     }
   });
+
+  // Init
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session) setAuthUI(session.user);
 
   loadEntries();
 </script>
