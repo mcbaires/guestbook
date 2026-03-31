@@ -175,6 +175,21 @@
       display: none;
     }
 
+    .modal-toggle {
+      font-size: 0.83rem;
+      color: #7c3aed;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      margin-top: 0.75rem;
+      display: block;
+      text-align: center;
+      width: 100%;
+    }
+
+    .modal-toggle:hover { text-decoration: underline; }
+
     .modal-actions {
       display: flex;
       gap: 0.6rem;
@@ -292,9 +307,10 @@
       <input id="auth-password-input" type="password" placeholder="••••••••" autocomplete="current-password" />
     </div>
     <div class="modal-actions">
-      <button class="btn-primary" id="signin-btn">Sign In</button>
+      <button class="btn-primary" id="auth-submit-btn">Sign In</button>
       <button class="btn-secondary" id="cancel-btn">Cancel</button>
     </div>
+    <button class="modal-toggle" id="mode-toggle">Don't have an account? Sign Up</button>
   </div>
 </div>
 
@@ -332,20 +348,24 @@
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
   // DOM refs
-  const authBtn       = document.getElementById('auth-btn');
-  const authEmailSpan = document.getElementById('auth-email');
-  const authModal     = document.getElementById('auth-modal');
-  const authError     = document.getElementById('auth-error');
-  const emailInput    = document.getElementById('auth-email-input');
-  const passwordInput = document.getElementById('auth-password-input');
-  const signinBtn     = document.getElementById('signin-btn');
-  const cancelBtn     = document.getElementById('cancel-btn');
-  const form          = document.getElementById('guestbook-form');
-  const nameInput     = document.getElementById('name');
-  const messageInput  = document.getElementById('message');
-  const submitBtn     = document.getElementById('submit-btn');
-  const entriesList   = document.getElementById('entries-list');
+  const authBtn        = document.getElementById('auth-btn');
+  const authEmailSpan  = document.getElementById('auth-email');
+  const authModal      = document.getElementById('auth-modal');
+  const authError      = document.getElementById('auth-error');
+  const emailInput     = document.getElementById('auth-email-input');
+  const passwordInput  = document.getElementById('auth-password-input');
+  const authSubmitBtn  = document.getElementById('auth-submit-btn');
+  const cancelBtn      = document.getElementById('cancel-btn');
+  const modeToggle     = document.getElementById('mode-toggle');
+  const modalTitle     = document.getElementById('modal-title');
+  const form           = document.getElementById('guestbook-form');
+  const nameInput      = document.getElementById('name');
+  const messageInput   = document.getElementById('message');
+  const submitBtn      = document.getElementById('submit-btn');
+  const entriesList    = document.getElementById('entries-list');
   const entriesHeading = document.getElementById('entries-heading');
+
+  let modalMode = 'signin'; // 'signin' | 'signup'
 
   // --- Auth UI ---
 
@@ -353,7 +373,6 @@
     if (user) {
       authEmailSpan.textContent = user.email;
       authBtn.textContent = 'Sign Out';
-      // Pre-fill name if empty
       if (!nameInput.value) nameInput.value = user.email.split('@')[0];
     } else {
       authEmailSpan.textContent = '';
@@ -368,11 +387,12 @@
       setAuthUI(null);
       nameInput.value = '';
     } else {
-      openModal();
+      openModal('signin');
     }
   });
 
-  function openModal() {
+  function openModal(mode = 'signin') {
+    setModalMode(mode);
     authModal.classList.add('open');
     authError.style.display = 'none';
     authError.textContent = '';
@@ -385,11 +405,30 @@
     authModal.classList.remove('open');
   }
 
+  function setModalMode(mode) {
+    modalMode = mode;
+    if (mode === 'signin') {
+      modalTitle.textContent = 'Sign In';
+      authSubmitBtn.textContent = 'Sign In';
+      modeToggle.textContent = "Don't have an account? Sign Up";
+    } else {
+      modalTitle.textContent = 'Sign Up';
+      authSubmitBtn.textContent = 'Sign Up';
+      modeToggle.textContent = 'Already have an account? Sign In';
+    }
+    authError.style.display = 'none';
+    authError.textContent = '';
+  }
+
+  modeToggle.addEventListener('click', () => {
+    setModalMode(modalMode === 'signin' ? 'signup' : 'signin');
+  });
+
   cancelBtn.addEventListener('click', closeModal);
   authModal.addEventListener('click', (e) => { if (e.target === authModal) closeModal(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeModal(); });
 
-  signinBtn.addEventListener('click', async () => {
+  authSubmitBtn.addEventListener('click', async () => {
     const email = emailInput.value.trim();
     const password = passwordInput.value;
 
@@ -398,25 +437,33 @@
       return;
     }
 
-    signinBtn.disabled = true;
-    signinBtn.textContent = 'Signing in…';
+    authSubmitBtn.disabled = true;
+    authSubmitBtn.textContent = modalMode === 'signin' ? 'Signing in…' : 'Signing up…';
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    let data, error;
 
-    signinBtn.disabled = false;
-    signinBtn.textContent = 'Sign In';
+    if (modalMode === 'signin') {
+      ({ data, error } = await supabase.auth.signInWithPassword({ email, password }));
+    } else {
+      ({ data, error } = await supabase.auth.signUp({ email, password }));
+    }
+
+    authSubmitBtn.disabled = false;
+    authSubmitBtn.textContent = modalMode === 'signin' ? 'Sign In' : 'Sign Up';
 
     if (error) {
       showAuthError(error.message);
+    } else if (modalMode === 'signup' && !data.session) {
+      // Email confirmation required
+      showAuthError('Check your email to confirm your account.');
     } else {
       setAuthUI(data.user);
       closeModal();
     }
   });
 
-  // Allow submitting the modal with Enter
   [emailInput, passwordInput].forEach(el => {
-    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') signinBtn.click(); });
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') authSubmitBtn.click(); });
   });
 
   function showAuthError(msg) {
